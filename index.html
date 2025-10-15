@@ -2,8 +2,9 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>海洋廢棄物辨識 Demo (響應式優化)</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <style>
+    <title>海洋廢棄物辨識 Demo (Top-1 區別顯示)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+    <style>
         /* 1. 全局樣式和字體 */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -27,7 +28,7 @@
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
             display: grid;
             gap: 20px;
-            grid-template-columns: 2fr 1fr; /* 桌面：左邊寬，右邊窄 */
+            grid-template-columns: 2fr 1fr; 
             grid-template-areas:
                 "header header"
                 "control control"
@@ -42,10 +43,10 @@
             padding-bottom: 10px;
             margin-bottom: 10px;
             font-size: 2em;
-            text-align: center; /* 標題在手機上居中 */
+            text-align: center;
         }
         
-        /* 3. 控制區 (步驟 1 & 步驟 2) - Flexbox 佈局 */
+        /* 3. 控制區 */
         .control-panel {
             grid-area: control;
             display: flex;
@@ -78,7 +79,7 @@
             border-radius: 6px;
             transition: background-color 0.3s, transform 0.1s;
             margin-right: 10px;
-            width: auto; /* 預設不佔滿，手機上調整 */
+            width: auto;
         }
 
         button#stopButton {
@@ -110,7 +111,7 @@
         }
         
         #webcam-container canvas {
-            max-width: 100%; /* 確保攝影機畫面不會超出容器 */
+            max-width: 100%;
             height: auto;
             display: block; 
         }
@@ -122,6 +123,7 @@
             border: 1px solid #e0e0e0;
             border-radius: 8px;
             padding: 20px;
+            /* 移除 Top-1 獨立顯示區的樣式，讓列表結果更專注 */
         }
         
         #result-container h2 {
@@ -133,13 +135,9 @@
             padding-bottom: 5px;
         }
         
+        /* 隱藏原本獨立的 Top-1 顯示區，現在合併到列表 */
         #top-result {
-            font-size: 1.3em;
-            font-weight: bold;
-            color: #007bff;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 1px dashed #e9ecef;
+            display: none; 
         }
 
         /* 分類標籤容器 */
@@ -147,6 +145,8 @@
             grid-area: label;
             padding: 10px 0;
             font-size: 1.1em;
+            /* 讓 label-container 佔據原本 top-result 的位置，與 result-container 合併 */
+            grid-area: result;
         }
 
         /* 單個分類項目 */
@@ -154,14 +154,30 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid #f0f0f0;
+            padding: 10px; /* 增加 padding */
+            margin-bottom: 5px;
+            border-radius: 4px;
+            background-color: #fcfcfc; /* 預設背景色 */
+            transition: all 0.2s ease;
         }
         
+        /* === 區別 Top-1 的樣式 === */
+        .class-item.top-1 {
+            background-color: #e6f7ff; /* 淺藍色背景，強調第一名 */
+            border: 2px solid #007bff; /* 藍色邊框 */
+            box-shadow: 0 2px 5px rgba(0, 123, 255, 0.2);
+            font-weight: bold;
+            transform: scale(1.02); /* 稍微放大 */
+        }
+
         .class-name {
             font-weight: 500;
             color: #333;
-            flex-basis: 30%; /* 給名稱一定的寬度 */
+            flex-basis: 30%; 
+        }
+        
+        .class-item.top-1 .class-name {
+            color: #0056b3; /* Top-1 名稱顏色加深 */
         }
 
         /* 進度條樣式 */
@@ -176,26 +192,38 @@
 
         .progress-bar {
             height: 100%;
-            background-color: #4CAF50; 
+            background-color: #4CAF50; /* 預設綠色進度條 */
             border-radius: 4px;
             transition: width 0.3s ease-out;
+        }
+        
+        /* Top-1 的進度條顏色可以改變 */
+        .class-item.top-1 .progress-bar {
+            background-color: #007bff; /* Top-1 進度條為藍色 */
         }
         
         .class-probability {
             font-weight: bold;
             color: #666;
-            width: 55px; /* 固定寬度，保持對齊，稍微增大 */
+            width: 55px; 
             text-align: right;
             font-size: 0.9em;
         }
-
-        #label-container div {
-             display: none;
+        
+        .class-item.top-1 .class-probability {
+            color: #007bff; /* Top-1 機率值顏色加深 */
         }
 
-        /* ========================================= */
+        #result-wrapper {
+            grid-area: result;
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+
         /* 7. 響應式設計 (Media Queries) */
-        /* 針對最大寬度 768px (平板和手機) */
         @media (max-width: 768px) {
             
             body {
@@ -203,21 +231,19 @@
             }
             
             #app-container {
-                width: 95%; /* 佔滿更多寬度 */
+                width: 95%; 
                 padding: 15px;
-                /* 將所有區域堆疊成單欄 */
                 grid-template-columns: 1fr; 
                 grid-template-areas:
                     "header"
                     "control"
                     "webcam"
-                    "result"
-                    "label"; /* 結果和標籤不再並排 */
+                    "result"; /* result 包含所有結果列表 */
                 gap: 15px;
             }
 
             .control-panel {
-                flex-direction: column; /* 控制面板堆疊 */
+                flex-direction: column; 
                 gap: 15px;
             }
             
@@ -226,28 +252,24 @@
             }
             
             button {
-                width: 100%; /* 按鈕佔滿整個寬度，更容易點擊 */
+                width: 100%; 
                 margin: 5px 0;
                 padding: 12px;
-                font-size: 18px; /* 增大字體，適合手機 */
+                font-size: 18px; 
             }
 
             h1 {
-                font-size: 1.5em; /* 縮小標題 */
+                font-size: 1.5em; 
             }
             
-            /* 影像和結果區塊 */
             #webcam-container {
                 min-height: 200px;
             }
 
-            #result-container {
-                /* 在手機上結果區塊不需要與其他東西並排，所以與 label 獨立 */
-            }
-            
-            /* 調整類別項目，讓文字有更多空間 */
+            /* 手機上 Top-1 區別仍然有效 */
             .class-item {
                 font-size: 0.9em;
+                padding: 8px;
             }
             
             .class-name {
@@ -255,7 +277,7 @@
             }
             
             .progress-bar-container {
-                margin: 0 5px; /* 縮小進度條兩側間距 */
+                margin: 0 5px; 
             }
             
             .class-probability {
@@ -267,7 +289,7 @@
 <body>
 
 <div id="app-container">
-    <h1>海洋廢棄物辨識 Demo (響應式優化)</h1>
+    <h1>海洋廢棄物辨識 Demo</h1>
 
     <div class="control-panel">
         <div class="control-box">
@@ -287,9 +309,9 @@
     <div id="webcam-container">
         </div>
     
-    <div id="result-container">
+    <div id="result-wrapper"> 
         <h2>即時辨識結果</h2>
-        <div id="top-result">Top-1 類別: N/A</div>
+        <div id="top-result"></div>
         
         <div id="label-container">
             </div>
@@ -305,7 +327,7 @@
     let startButton = document.getElementById('startButton');
     let stopButton = document.getElementById('stopButton');
     let loadStatus = document.getElementById('load-status');
-    let topResultDiv = document.getElementById('top-result');
+    let topResultDiv = document.getElementById('top-result'); // 雖然隱藏，但保留變數
     let animationFrameId;
 
     // 停止攝影機
@@ -327,8 +349,7 @@
         startButton.disabled = true;
         startButton.innerText = '載入中...';
         loadStatus.innerHTML = '正在載入模型和攝影機...';
-        topResultDiv.innerText = 'Top-1 類別: 載入中...';
-
+        
         try {
             // 1. 載入模型
             const modelURL = URL + "model.json";
@@ -338,7 +359,6 @@
             
             // 2. 設置攝影機
             const flip = true; 
-            // 注意：攝影機尺寸保持 300x300，但 CSS 會限制其最大寬度為 100%
             webcam = new tmImage.Webcam(300, 300, flip); 
             await webcam.setup(); 
             
@@ -348,35 +368,33 @@
             animationFrameId = window.requestAnimationFrame(loop);
 
             // 4. 更新 DOM
-            document.getElementById("webcam-container").innerHTML = ''; // 清空提示文字
+            document.getElementById("webcam-container").innerHTML = ''; 
             document.getElementById("webcam-container").appendChild(webcam.canvas);
             
             labelContainer = document.getElementById("label-container");
-            labelContainer.innerHTML = ''; // 清空舊標籤
+            labelContainer.innerHTML = ''; 
             
             // 為每個類別創建結構化的 DOM 元素 (包含進度條)
             const classNames = model.getClassLabels();
             for (let i = 0; i < maxPredictions; i++) {
                 const item = document.createElement('div');
                 item.className = 'class-item';
-                
-                // 類別名稱
+                item.id = `item-${i}`; // 為每個項目添加 ID
+
                 const name = document.createElement('span');
                 name.className = 'class-name';
                 name.innerText = classNames[i];
                 
-                // 進度條
                 const barContainer = document.createElement('div');
                 barContainer.className = 'progress-bar-container';
                 const bar = document.createElement('div');
                 bar.className = 'progress-bar';
-                bar.id = `bar-${i}`; // 方便更新寬度
+                bar.id = `bar-${i}`; 
                 barContainer.appendChild(bar);
                 
-                // 機率值
                 const probability = document.createElement('span');
                 probability.className = 'class-probability';
-                probability.id = `prob-${i}`; // 方便更新數值
+                probability.id = `prob-${i}`; 
                 
                 item.appendChild(name);
                 item.appendChild(barContainer);
@@ -401,7 +419,7 @@
 
     async function loop() {
         if (!isRunning) return;
-        webcam.update(); // 更新攝影機畫面
+        webcam.update(); 
         await predict();
         animationFrameId = window.requestAnimationFrame(loop);
     }
@@ -410,28 +428,37 @@
     async function predict() {
         const prediction = await model.predict(webcam.canvas);
         
-        let topPrediction = { probability: -1, className: 'N/A' };
-
+        let topPredictionIndex = -1;
+        let maxProb = -1;
+        
+        // 1. 尋找 Top-1 並更新所有項目的視覺狀態
+        for (let i = 0; i < maxPredictions; i++) {
+            if (prediction[i].probability > maxProb) {
+                maxProb = prediction[i].probability;
+                topPredictionIndex = i;
+            }
+        }
+        
+        // 2. 應用/移除 Top-1 樣式並更新數據
         for (let i = 0; i < maxPredictions; i++) {
             const prob = prediction[i].probability;
             const probPercent = (prob * 100).toFixed(2);
             
-            // 1. 更新機率和進度條
+            const item = document.getElementById(`item-${i}`);
             const bar = document.getElementById(`bar-${i}`);
             const probSpan = document.getElementById(`prob-${i}`);
-            
+
+            // 更新數據
             if(bar) bar.style.width = `${prob * 100}%`;
             if(probSpan) probSpan.innerText = `${probPercent}%`;
             
-            // 2. 尋找 Top-1
-            if (prob > topPrediction.probability) {
-                topPrediction.probability = prob;
-                topPrediction.className = prediction[i].className;
+            // 應用 Top-1 樣式
+            if (i === topPredictionIndex) {
+                item.classList.add('top-1');
+            } else {
+                item.classList.remove('top-1');
             }
         }
-        
-        // 3. 更新 Top-1 顯示
-        topResultDiv.innerText = `Top-1 類別: ${topPrediction.className} (${(topPrediction.probability).toFixed(2)})`;
     }
 </script>
 
