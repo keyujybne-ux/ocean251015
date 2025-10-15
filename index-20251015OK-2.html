@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>海洋廢棄物辨識 Demo (優化版)</title>
+    <style>
+        /* 1. 全局樣式和字體 */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f2f5; /* 輕微的背景色 */
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding-top: 30px;
+        }
+
+        /* 2. 主容器佈局 (使用 Grid 模仿範例的兩欄/多區塊結構) */
+        #app-container {
+            width: 90%;
+            max-width: 1200px;
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+            display: grid;
+            gap: 20px;
+            grid-template-columns: 2fr 1fr; /* 左邊 (影像) 寬，右邊 (結果) 窄 */
+            grid-template-areas:
+                "header header"
+                "control control"
+                "webcam result"
+                "label result";
+        }
+
+        h1 {
+            grid-area: header;
+            color: #1f3a5f; /* 深藍色標題 */
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+        
+        /* 3. 控制區 (步驟 1 & 步驟 2) - Flexbox 佈局 */
+        .control-panel {
+            grid-area: control;
+            display: flex;
+            gap: 20px;
+        }
+
+        .control-box {
+            background-color: #f7f9fb;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            flex: 1; /* 讓每個控制盒均分空間 */
+        }
+        
+        .control-box h2 {
+            color: #007bff;
+            font-size: 1.2em;
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+
+        /* 4. 按鈕樣式 */
+        button {
+            background-color: #28a745; /* 綠色，代表「啟動」 */
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: background-color 0.3s, transform 0.1s;
+            margin-right: 10px;
+        }
+
+        button#stopButton {
+            background-color: #dc3545; /* 紅色，代表「停止」 */
+        }
+        
+        button:hover {
+            background-color: #1e7e34;
+            transform: translateY(-1px);
+        }
+        
+        button:disabled {
+            background-color: #adb5bd;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* 5. 影像顯示區 */
+        #webcam-container {
+            grid-area: webcam;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex; /* 確保 canvas 居中 */
+            justify-content: center;
+            align-items: center;
+            min-height: 250px; /* 至少 250px 高 */
+            background-color: #000; /* 模擬黑色的影像畫面 */
+        }
+        
+        #webcam-container canvas {
+            display: block; /* 移除 canvas 下方的空間 */
+        }
+
+        /* 6. 辨識結果區 */
+        #result-container {
+            grid-area: result;
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        #result-container h2 {
+            font-size: 1.2em;
+            color: #1f3a5f;
+            margin-top: 0;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #e9ecef;
+            padding-bottom: 5px;
+        }
+        
+        /* 頂部結果顯示 (Top-1) */
+        #top-result {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px dashed #e9ecef;
+        }
+
+        /* 分類標籤容器 (取代 label-container) */
+        #label-container {
+            grid-area: label;
+            padding: 10px 0;
+            font-size: 1.1em;
+        }
+
+        /* 單個分類項目 */
+        .class-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .class-name {
+            font-weight: 500;
+            color: #333;
+        }
+
+        /* 進度條樣式 */
+        .progress-bar-container {
+            flex-grow: 1; /* 佔據中間大部分空間 */
+            height: 8px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            margin: 0 15px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background-color: #4CAF50; /* 綠色進度條 */
+            border-radius: 4px;
+            transition: width 0.3s ease-out;
+        }
+        
+        .class-probability {
+            font-weight: bold;
+            color: #666;
+            width: 50px; /* 固定寬度，保持對齊 */
+            text-align: right;
+        }
+
+        /* 隱藏 Teachable Machine 預設建立的 div，我們將在 JS 中創建結構化的 class-item */
+        #label-container div {
+             display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+    <h1>海洋廢棄物辨識 Demo (美化版)</h1>
+
+    <div class="control-panel">
+        <div class="control-box">
+            <h2>步驟 1 | 載入模型</h2>
+            <p>模型資料夾位置：<code>./my_model/</code></p>
+            <button type="button" onclick="init()" id="startButton">載入並啟動攝影機</button>
+            <div id="load-status">模型尚未載入</div>
+        </div>
+        
+        <div class="control-box">
+            <h2>步驟 2 | 辨識結果</h2>
+            <p>請允許瀏覽器使用您的攝影機進行即時辨識。</p>
+            <button type="button" onclick="stopWebcam()" id="stopButton" disabled>關閉攝影機</button>
+        </div>
+    </div>
+    
+    <div id="webcam-container">
+        </div>
+    
+    <div id="result-container">
+        <h2>即時辨識結果</h2>
+        <div id="top-result">Top-1 類別: N/A</div>
+        
+        <div id="label-container">
+            </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+<script type="text/javascript">
+    const URL = "./my_model/"; // 資料路徑保持不變
+
+    let model, webcam, labelContainer, maxPredictions, isRunning = false;
+    let startButton = document.getElementById('startButton');
+    let stopButton = document.getElementById('stopButton');
+    let loadStatus = document.getElementById('load-status');
+    let topResultDiv = document.getElementById('top-result');
+    let animationFrameId;
+
+    // 停止攝影機
+    function stopWebcam() {
+        if (webcam) {
+            webcam.stop();
+            isRunning = false;
+            cancelAnimationFrame(animationFrameId);
+            stopButton.disabled = true;
+            startButton.disabled = false;
+            startButton.innerText = '重新啟動攝影機';
+            loadStatus.innerHTML = '模型已載入，攝影機已停止';
+            document.getElementById("webcam-container").innerHTML = '<p style="color:white; padding: 20px;">攝影機已關閉</p>';
+        }
+    }
+
+    // Load the image model and setup the webcam
+    async function init() {
+        startButton.disabled = true;
+        startButton.innerText = '載入中...';
+        loadStatus.innerHTML = '正在載入模型和攝影機...';
+        topResultDiv.innerText = 'Top-1 類別: 載入中...';
+
+        try {
+            // 1. 載入模型
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+            
+            // 2. 設置攝影機
+            const flip = true; 
+            webcam = new tmImage.Webcam(300, 300, flip); // 調整尺寸適應介面
+            await webcam.setup(); 
+            
+            // 3. 啟動
+            await webcam.play();
+            isRunning = true;
+            animationFrameId = window.requestAnimationFrame(loop);
+
+            // 4. 更新 DOM
+            document.getElementById("webcam-container").innerHTML = ''; // 清空提示文字
+            document.getElementById("webcam-container").appendChild(webcam.canvas);
+            
+            labelContainer = document.getElementById("label-container");
+            labelContainer.innerHTML = ''; // 清空舊標籤
+            
+            // 為每個類別創建結構化的 DOM 元素 (包含進度條)
+            const classNames = model.getClassLabels();
+            for (let i = 0; i < maxPredictions; i++) {
+                const item = document.createElement('div');
+                item.className = 'class-item';
+                
+                // 類別名稱
+                const name = document.createElement('span');
+                name.className = 'class-name';
+                name.innerText = classNames[i];
+                
+                // 進度條
+                const barContainer = document.createElement('div');
+                barContainer.className = 'progress-bar-container';
+                const bar = document.createElement('div');
+                bar.className = 'progress-bar';
+                bar.id = `bar-${i}`; // 方便更新寬度
+                barContainer.appendChild(bar);
+                
+                // 機率值
+                const probability = document.createElement('span');
+                probability.className = 'class-probability';
+                probability.id = `prob-${i}`; // 方便更新數值
+                
+                item.appendChild(name);
+                item.appendChild(barContainer);
+                item.appendChild(probability);
+                labelContainer.appendChild(item);
+            }
+            
+            // 5. 更新狀態
+            startButton.innerText = '模型已載入';
+            startButton.disabled = true;
+            stopButton.disabled = false;
+            loadStatus.innerHTML = '✅ 模型載入完成，攝影機運作中';
+
+        } catch (error) {
+            console.error("載入失敗:", error);
+            loadStatus.innerHTML = '❌ 載入失敗 (請檢查console)';
+            startButton.innerText = '啟動模型 (重試)';
+            startButton.disabled = false;
+            stopButton.disabled = true;
+        }
+    }
+
+    async function loop() {
+        if (!isRunning) return;
+        webcam.update(); // 更新攝影機畫面
+        await predict();
+        animationFrameId = window.requestAnimationFrame(loop);
+    }
+
+    // run the webcam image through the image model
+    async function predict() {
+        const prediction = await model.predict(webcam.canvas);
+        
+        let topPrediction = { probability: -1, className: 'N/A' };
+
+        for (let i = 0; i < maxPredictions; i++) {
+            const prob = prediction[i].probability;
+            const probPercent = (prob * 100).toFixed(2);
+            
+            // 1. 更新機率和進度條
+            const bar = document.getElementById(`bar-${i}`);
+            const probSpan = document.getElementById(`prob-${i}`);
+            
+            if(bar) bar.style.width = `${prob * 100}%`;
+            if(probSpan) probSpan.innerText = `${probPercent}%`;
+            
+            // 2. 尋找 Top-1
+            if (prob > topPrediction.probability) {
+                topPrediction.probability = prob;
+                topPrediction.className = prediction[i].className;
+            }
+        }
+        
+        // 3. 更新 Top-1 顯示
+        topResultDiv.innerText = `Top-1 類別: ${topPrediction.className} (${(topPrediction.probability).toFixed(2)})`;
+    }
+</script>
+
+</body>
+</html>
